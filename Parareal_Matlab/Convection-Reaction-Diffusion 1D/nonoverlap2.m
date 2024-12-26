@@ -1,0 +1,131 @@
+clear all
+close all
+clc
+
+
+% non-overlapping subdomains
+
+syms phi phiDT
+
+n  = 11; % number of nodes    5-3,7-4
+N_subdomains = (n-1)/2+1;
+
+A  = -phi*diag(diag(eye(n-1)),-1) + eye(n)
+
+B  = -phiDT*diag(diag(eye((n-1)/2)),-1) + eye((n-1)/2+1)
+
+B1 = -phiDT*diag(diag(eye((n-1)/2)),-1)
+
+indice_R_coarse  = 0:2:n-1;
+R = zeros(length(indice_R_coarse),n);
+for i = 1:length(indice_R_coarse)
+    R(i,indice_R_coarse(i)+1) = 1;
+end
+
+% first subdomain  Omega_1 = {0}
+R1 = zeros(1,n);
+R1(1) = 1;
+A1 = R1*A*R1';
+
+N_nodes_subdomain = 2;
+indice_R_subdomains = zeros(N_subdomains-1,N_nodes_subdomain);
+k = 0;
+for i =1:N_subdomains-1
+    indice_R_subdomains(i,1) = i + k;
+    indice_R_subdomains(i,2) = i + k + 1; 
+    k = k + 1;
+end
+
+% Omega_2 = {1,2} Omega_3 = {3,4} 
+% Omega_4 = {5,6} Omega_5 = {7,8}
+% Omega_6 = {9,10}
+R2_end = zeros((N_subdomains-1)*N_nodes_subdomain,n) ;
+for i = 1:length(indice_R_subdomains)
+    R2_end(N_nodes_subdomain*(i-1)+1,indice_R_subdomains(i)+1) = 1;
+    R2_end(N_nodes_subdomain*(i-1)+2,indice_R_subdomains(i)+2) = 1;
+end
+
+R_sub=[];       % restriction matrices
+A_sub = []; % sub-matrices
+for i = 2: N_subdomains 
+    R_sub{i} = R2_end(N_nodes_subdomain*(i-2)+1:N_nodes_subdomain*(i-2)+2,:);
+    A_sub{i} = R_sub{i}*A*R_sub{i}';    
+end
+% R2 = R2_end(1:2,:);
+% R3 = R2_end(3:4,:);
+% R4 = R2_end(5:6,:);
+% R5 = R2_end(7:8,:);
+% R6 = R2_end(9:10,:);
+
+% nameC = strseq('Csubspace',1:5);
+% nameC = char(nameC);
+
+% global_matrix = {'A2', 'A3'};
+% A_sub = [];
+% for i =2:N_subdomains 
+%     A_sub{i} = R{i}*A*R{i}';    
+% end
+% A2 = R2*A*R2';
+% A3 = R3*A*R3';
+% A4 = R4*A*R4';
+% A5 = R5*A*R5';
+% A6 = R6*A*R6';
+
+
+% multiplicative 
+P = R1'*A1*R1;
+for i = 2:N_subdomains
+    P = P + R_sub{i}'*A_sub{i}*R_sub{i};
+end
+M1 = P*(R'*B*R +  eye(n)-R'*R)
+M1^-1
+% M1  = ( R1'*A1*R1 + R2'*A2*R2 + R3'*A3*R3 + R4'*A4*R4 + R5'*A5*R5 + R6'*A6*R6)*(R'*B*R + eye(n)-R'*R)
+
+
+% additive
+M2 = R'*B1*R + P
+M2^-1
+% M2  = R'*B1*R + ( R1'*A1*R1 + R2'*A2*R2 + R3'*A3*R3 + R4'*A4*R4 + R5'*A5*R5 + R6'*A6*R6 )
+
+(R'*B*R + eye(n) - R'*R)^-1
+% (R'*(B^-1)*R + eye(n)) - (R'*(B^-1)*R*R'*R*R'*(B^-1)*R)/(1+R*R'*(B^-1)*R*R')
+
+%----------------------------------------
+%FCF-relaxation
+% (eye(n)-P^-1*A)*(eye(n)-M1^-1*A)
+
+%F-relaxation
+eye(n)-M1^-1*A
+
+%FC - relaxation
+FC_relax_error_propagation = (eye(n)-M1^-1*A);
+FC_relax_error_propagation_coarse = FC_relax_error_propagation(1:2:end,1:2:end)
+
+%FCF - relaxation
+% a = (eye(n)-P^-1*A)
+% b = (eye(n)-M1^-1*A)
+% a*b - b*a
+FCF_relax_error_propagation = (eye(n)-P^-1*A)*(eye(n)-M1^-1*A);
+FCF_relax_error_propagation_coarse = FCF_relax_error_propagation(1:2:end,1:2:end)
+
+
+%FCFF - relaxation
+FCFF_relax_error_propagation = (eye(n)-P^-1*A)*(eye(n)-P^-1*A)*(eye(n)-M1^-1*A);
+FCFF_relax_error_propagation_coarse = FCFF_relax_error_propagation(1:2:end,1:2:end)
+
+
+% FC-FC - relaxation
+FCFC_relax_error_propagation = (eye(n)-M1^-1*A)*(eye(n)-M1^-1*A);
+FCFC_relax_error_propagation_coarse = FCFC_relax_error_propagation(1:2:end,1:2:end)
+
+% FC-FC-F - relaxation
+FCFCF_relax_error_propagation = (eye(n)-P^-1*A)*(eye(n)-M1^-1*A)^2;
+FCFCF_relax_error_propagation_coarse = FCFCF_relax_error_propagation(1:2:end,1:2:end)
+
+% F = A;
+% C = B;
+% eig_F = eig(F)
+% eig_C = eig(C)
+% FC_bound = max(abs(eig(F).^2 - eig(C)).*(1 - abs(eig(C)).^((N-1)/2) )./ (1 - eig(C)))
+% 
+% FCF_bound = max(abs(eig(F).^2 - eig(C)).*(1 - abs(eig(C)).^((N-1)/2) )./ (1 - eig(C)).*abs(eig(F)).^2)
